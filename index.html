@@ -56,7 +56,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{t
 <div class="stat"><small>Percentage</small><strong id="percentage">0%</strong></div>
 <div class="stat"><small>Grade / Status</small><strong id="grade">—</strong><div id="status" class="status muted">Not calculated</div></div>
 </div>
-<div class="actions no-print"><button class="primary" id="save">Save Student Record</button><button class="secondary" id="export">Export Records (JSON)</button></div>
+<div id="subjectBreakdown"></div><div class="actions no-print"><button class="primary" id="save">Save Student Record</button><button class="secondary" id="export">Export Records (JSON)</button></div>
 </section>
 <section class="panel" id="records-panel">
 <h2>Saved Student Records — Class Wise</h2><div class="student-grid no-print" style="margin-bottom:12px"><div><label for="classFilter">Show Class</label><select id="classFilter" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:11px 12px;font:inherit"><option value="">All Classes</option></select></div></div><div class="actions no-print" style="margin:0 0 12px"><button class="primary" id="downloadClassPdf">Download Class / All Results PDF</button></div><p class="note no-print">PDF save karne ke liye print window mein Destination/Printer se “Save as PDF” select karein.</p><div id="records"><div class="empty">No records saved yet.</div></div>
@@ -92,9 +92,11 @@ function calculate(){
  const obtained=rows.reduce((a,s)=>a+s.obtained,0),total=rows.reduce((a,s)=>a+s.max,0),percentage=total?obtained/total*100:0;
  const passed=rows.every(s=>s.obtained/s.max>=.4);
  const grade=percentage>=90?'A+':percentage>=80?'A':percentage>=70?'B':percentage>=60?'C':percentage>=50?'D':percentage>=40?'E':'F';
+ rows.forEach(s=>s.status=s.obtained/s.max>=.4?'PASS':'FAIL');
  lastResult={name:document.getElementById('studentName').value.trim(),roll:document.getElementById('rollNumber').value.trim(),className:document.getElementById('className').value.trim(),subjects:rows,obtained,total,percentage,grade,status:passed?'PASS':'FAIL',date:new Date().toLocaleString()};
  document.getElementById('obtained').textContent=fmt(obtained);document.getElementById('total').textContent=fmt(total);
  document.getElementById('percentage').textContent=percentage.toFixed(2)+'%';document.getElementById('grade').textContent=grade;
+ document.getElementById('subjectBreakdown').innerHTML='<h3>Subject-wise Result</h3><table><thead><tr><th>Subject</th><th>Obtained</th><th>Total</th><th>Status</th></tr></thead><tbody>'+rows.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td><td class="status '+(s.status==='PASS'?'pass':'fail')+'">'+s.status+'</td></tr>').join('')+'</tbody></table>';
  const st=document.getElementById('status');st.textContent=passed?'PASS':'FAIL';st.className='status '+(passed?'pass':'fail');
  return lastResult;
 }
@@ -132,16 +134,16 @@ function printClassReport(){
  if(!rows.length){alert('Is class ke liye koi saved record nahi mila.');return}
  const w=window.open('','_blank');if(!w){alert('Please allow pop-ups to create the PDF.');return}
  const cards=rows.map(r=>{
- const subjects=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td></tr>').join('');
+ const subjects=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td><td class="'+(s.obtained/s.max>=.4?'pass':'fail')+'">'+(s.obtained/s.max>=.4?'PASS':'FAIL')+'</td></tr>').join('');
  return '<section class="student"><h2>'+esc(r.name)+' — '+esc(r.className||'Unassigned')+'</h2><p>Roll No: '+esc(r.roll||'—')+' | Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+esc(r.grade)+' | Status: '+esc(r.status)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th></tr>'+subjects+'</table><p><b>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</b></p></section>';
  }).join('');
- w.document.write('<!doctype html><html><head><title>Class Student Results</title><style>body{font:14px Arial;padding:24px;color:#172033}h1{margin-bottom:4px}.student{margin:22px 0;padding-bottom:16px;border-bottom:2px solid #ddd;break-inside:avoid}table{border-collapse:collapse;width:100%;margin-top:10px}td,th{border:1px solid #bbb;padding:7px;text-align:left}@media print{button{display:none}}</style></head><body><h1>Student Results Report</h1><p>Class: '+esc(cls||'All Classes')+' | Students: '+rows.length+'</p>'+cards+'</body></html>');
+ w.document.write('<!doctype html><html><head><title>Class Student Results</title><style>body{font:14px Arial;padding:24px;color:#172033}.pass{color:#15803d;font-weight:bold}.fail{color:#b91c1c;font-weight:bold}h1{margin-bottom:4px}.student{margin:22px 0;padding-bottom:16px;border-bottom:2px solid #ddd;break-inside:avoid}table{border-collapse:collapse;width:100%;margin-top:10px}td,th{border:1px solid #bbb;padding:7px;text-align:left}@media print{button{display:none}}</style></head><body><h1>Student Results Report</h1><p>Class: '+esc(cls||'All Classes')+' | Students: '+rows.length+'</p>'+cards+'</body></html>');
  w.document.close();w.focus();w.print();
 }
 function printRecord(r){
  const w=window.open('','_blank');if(!w){alert('Please allow pop-ups to print a saved result.');return}
- const lines=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td></tr>').join('');
- w.document.write('<html><head><title>Student Result</title><style>body{font:16px Arial;padding:30px}table{border-collapse:collapse;width:100%;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}</style></head><body><h1>Student Result</h1><p>Class: '+esc(r.className||'Not specified')+' | Name: '+esc(r.name)+' | Roll: '+esc(r.roll)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th></tr>'+lines+'</table><h3>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</h3><h3>Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+r.grade+' | '+r.status+'</h3></body></html>');
+ const lines=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td><td class="'+(s.obtained/s.max>=.4?'pass':'fail')+'">'+(s.obtained/s.max>=.4?'PASS':'FAIL')+'</td></tr>').join('');
+ w.document.write('<html><head><title>Student Result</title><style>body{font:16px Arial;padding:30px}.pass{color:#15803d;font-weight:bold}.fail{color:#b91c1c;font-weight:bold}table{border-collapse:collapse;width:100%;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}</style></head><body><h1>Student Result</h1><p>Class: '+esc(r.className||'Not specified')+' | Name: '+esc(r.name)+' | Roll: '+esc(r.roll)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th></tr>'+lines+'</table><h3>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</h3><h3>Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+r.grade+' | '+r.status+'</h3></body></html>');
  w.document.close();w.print();
 }
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
