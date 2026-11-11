@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student Result Calculator</title>
+<style>
+:root{font-family:Inter,Segoe UI,Arial,sans-serif;color:#172033;background:#f3f6fb;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0;padding:28px 16px 50px}.wrap{max-width:1050px;margin:auto}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}
+h1{font-size:clamp(25px,4vw,36px);margin:0 0 6px}header p,.muted{color:#65718a;margin:0}
+.panel{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px;margin:16px 0;box-shadow:0 5px 20px #15294b0a}
+h2{font-size:19px;margin:0 0 16px}.student-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+label{display:block;font-size:13px;font-weight:650;color:#46536b;margin-bottom:6px}
+input{width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:11px 12px;font:inherit;background:#fff;color:#172033}
+input:focus{outline:3px solid #dbeafe;border-color:#3b82f6}
+.subject-head,.subject-row{display:grid;grid-template-columns:minmax(140px,2fr) minmax(95px,1fr) minmax(95px,1fr) 42px;gap:10px;align-items:center}
+.subject-head{font-size:12px;color:#64748b;font-weight:700;padding:0 4px 8px}
+.subject-row{margin:8px 0}.subject-row input{min-width:0}
+button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-weight:650;cursor:pointer}
+.primary{background:#2563eb;color:white}.secondary{background:#eaf1ff;color:#1d4ed8}.danger{background:#fff0f0;color:#b91c1c}.icon-btn{padding:9px;background:#fff0f0;color:#b91c1c}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{background:#f6f8fc;border-radius:12px;padding:15px}.stat small{display:block;color:#64748b;margin-bottom:6px}.stat strong{font-size:23px}
+.status{font-weight:750}.pass{color:#15803d}.fail{color:#b91c1c}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #e8edf4}th{color:#64748b;font-size:12px}
+.empty{padding:18px;text-align:center;color:#64748b}.record-actions{display:flex;gap:6px;flex-wrap:wrap}
+.note{font-size:12px;color:#64748b;margin-top:10px}
+@media(max-width:650px){body{padding:18px 10px}.panel{padding:16px}.student-grid{grid-template-columns:1fr}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.subject-head,.subject-row{grid-template-columns:minmax(90px,1.5fr) minmax(70px,1fr) minmax(70px,1fr) 36px;gap:6px}.subject-row input{padding:9px 7px;font-size:13px}.subject-head{font-size:10px}}
+@media print{body{background:#fff;padding:0}.no-print,#records-panel{display:none!important}.panel{box-shadow:none;border:1px solid #ddd;break-inside:avoid}.wrap{max-width:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><div><h1>Student Result Calculator</h1><p>Calculate, save and print student results — works offline.</p></div><button class="secondary no-print" onclick="window.print()">Print Result</button></header>
+<section class="panel">
+<h2>Student Information</h2>
+<div class="student-grid">
+<div><label for="studentName">Student Name</label><input id="studentName" placeholder="Enter student name"></div>
+<div><label for="rollNumber">Roll Number</label><input id="rollNumber" placeholder="Enter roll number"></div>
+</div>
+</section>
+<section class="panel">
+<h2>Subjects & Marks</h2>
+<div class="subject-head"><span>Subject</span><span>Obtained Marks</span><span>Total Marks</span><span></span></div>
+<div id="subjects"></div>
+<div class="actions no-print"><button class="secondary" id="addSubject">＋ Add Extra Subject</button><button class="primary" id="calculate">Calculate Result</button></div>
+<p class="note">There are 7 subjects by default. You can add extra subjects and change the total marks for every subject (for example, Computer = 75). Entered marks must not exceed that subject's total marks. Passing rule: at least 40% in each subject.</p>
+</section>
+<section class="panel" id="result-panel">
+<h2>Result Summary</h2>
+<div class="summary">
+<div class="stat"><small>Total Obtained</small><strong id="obtained">0</strong></div>
+<div class="stat"><small>Total Marks</small><strong id="total">0</strong></div>
+<div class="stat"><small>Percentage</small><strong id="percentage">0%</strong></div>
+<div class="stat"><small>Grade / Status</small><strong id="grade">—</strong><div id="status" class="status muted">Not calculated</div></div>
+</div>
+<div class="actions no-print"><button class="primary" id="save">Save Student Record</button><button class="secondary" id="export">Export Records (JSON)</button></div>
+</section>
+<section class="panel" id="records-panel">
+<h2>Saved Student Records</h2><div id="records"><div class="empty">No records saved yet.</div></div>
+</section>
+</div>
+<script>
+const defaults=['English','Urdu','Mathematics','Physics','Chemistry','Computer','Islamiyat'];
+const subjectsEl=document.getElementById('subjects');
+let lastResult=null;
+function addSubject(name='',max=100,obtained=''){
+ const row=document.createElement('div');row.className='subject-row';
+ row.innerHTML='<input class="subject-name" aria-label="Subject name" placeholder="Subject name"><input class="subject-obtained" type="number" min="0" step="any" placeholder="0" aria-label="Obtained marks"><input class="subject-max" type="number" min="1" step="any" placeholder="100" aria-label="Total marks"><button class="icon-btn no-print" type="button" title="Remove subject" aria-label="Remove subject">×</button>';
+ row.querySelector('.subject-name').value=name;
+ row.querySelector('.subject-max').value=max;
+ row.querySelector('.subject-obtained').value=obtained;
+ row.querySelector('button').addEventListener('click',()=>{row.remove();calculate()});
+ row.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>{lastResult=null}));
+ subjectsEl.appendChild(row);
+}
+defaults.forEach(s=>addSubject(s,100,''));
+document.getElementById('addSubject').addEventListener('click',()=>addSubject('Extra Subject',100,''));
+function getSubjects(){
+ return [...subjectsEl.querySelectorAll('.subject-row')].map((r,i)=>({
+ name:r.querySelector('.subject-name').value.trim()||('Subject '+(i+1)),
+ obtained:Number(r.querySelector('.subject-obtained').value||0),
+ max:Number(r.querySelector('.subject-max').value)
+ }));
+}
+function calculate(){
+ const rows=getSubjects();
+ if(!rows.length){alert('Please add at least one subject.');return null}
+ for(const s of rows){if(!Number.isFinite(s.max)||s.max<=0||s.obtained<0||s.obtained>s.max){alert('Please check marks. Obtained marks must be between 0 and the subject total, and total marks must be greater than 0.');return null}}
+ const obtained=rows.reduce((a,s)=>a+s.obtained,0),total=rows.reduce((a,s)=>a+s.max,0),percentage=total?obtained/total*100:0;
+ const passed=rows.every(s=>s.obtained/s.max>=.4);
+ const grade=percentage>=90?'A+':percentage>=80?'A':percentage>=70?'B':percentage>=60?'C':percentage>=50?'D':percentage>=40?'E':'F';
+ lastResult={name:document.getElementById('studentName').value.trim(),roll:document.getElementById('rollNumber').value.trim(),subjects:rows,obtained,total,percentage,grade,status:passed?'PASS':'FAIL',date:new Date().toLocaleString()};
+ document.getElementById('obtained').textContent=fmt(obtained);document.getElementById('total').textContent=fmt(total);
+ document.getElementById('percentage').textContent=percentage.toFixed(2)+'%';document.getElementById('grade').textContent=grade;
+ const st=document.getElementById('status');st.textContent=passed?'PASS':'FAIL';st.className='status '+(passed?'pass':'fail');
+ return lastResult;
+}
+function fmt(n){return Number(n.toFixed(2)).toString()}
+document.getElementById('calculate').addEventListener('click',calculate);
+document.getElementById('save').addEventListener('click',()=>{
+ const r=calculate();if(!r)return;
+ if(!r.name){alert('Please enter the student name first.');return}
+ const all=JSON.parse(localStorage.getItem('studentResults')||'[]');all.unshift({...r,id:Date.now()});localStorage.setItem('studentResults',JSON.stringify(all));renderRecords();alert('Student result saved in this browser.');
+});
+function renderRecords(){
+ const all=JSON.parse(localStorage.getItem('studentResults')||'[]'),el=document.getElementById('records');
+ if(!all.length){el.innerHTML='<div class="empty">No records saved yet.</div>';return}
+ el.innerHTML='<table><thead><tr><th>Name</th><th>Roll No.</th><th>Percentage</th><th>Grade</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>';
+ const body=el.querySelector('tbody');
+ all.forEach(r=>{const tr=document.createElement('tr');[r.name,r.roll,r.percentage.toFixed(2)+'%',r.grade,r.status].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td)});
+ const td=document.createElement('td');td.className='record-actions';const p=document.createElement('button');p.className='secondary';p.textContent='Print';p.onclick=()=>printRecord(r);
+ const d=document.createElement('button');d.className='danger';d.textContent='Delete';d.onclick=()=>{if(confirm('Delete this record?')){localStorage.setItem('studentResults',JSON.stringify(all.filter(x=>x.id!==r.id)));renderRecords()}};td.append(p,d);tr.appendChild(td);body.appendChild(tr)});
+}
+function printRecord(r){
+ const w=window.open('','_blank');if(!w){alert('Please allow pop-ups to print a saved result.');return}
+ const lines=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td></tr>').join('');
+ w.document.write('<html><head><title>Student Result</title><style>body{font:16px Arial;padding:30px}table{border-collapse:collapse;width:100%;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}</style></head><body><h1>Student Result</h1><p>Name: '+esc(r.name)+' | Roll: '+esc(r.roll)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th></tr>'+lines+'</table><h3>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</h3><h3>Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+r.grade+' | '+r.status+'</h3></body></html>');
+ w.document.close();w.print();
+}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+document.getElementById('export').addEventListener('click',()=>{
+ const data=localStorage.getItem('studentResults')||'[]';const blob=new Blob([data],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='student-results.json';a.click();URL.revokeObjectURL(a.href);
+});
+renderRecords();calculate();
+</script>
+</body></html>
