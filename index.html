@@ -32,7 +32,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{t
 </head>
 <body>
 <div class="wrap">
-<header><div><h1>Student Result Calculator</h1><p>Calculate, save and print student results — works offline.</p></div><button class="secondary no-print" onclick="printCurrentResult()">Download Current Result PDF</button></header>
+<header><div><h1>Student Result Calculator</h1><p>Calculate, save and download student results — works offline.</p></div><button class="secondary no-print" onclick="printCurrentResult()">Download Current Result PDF</button></header>
 <section class="panel">
 <h2>Student Information</h2>
 <div class="student-grid">
@@ -59,7 +59,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{t
 <div id="subjectBreakdown"></div><div class="actions no-print"><button class="primary" id="save">Save Student Record</button><button class="secondary" id="export">Export Records (JSON)</button></div>
 </section>
 <section class="panel" id="records-panel">
-<h2>Saved Student Records — Class Wise</h2><div class="student-grid no-print" style="margin-bottom:12px"><div><label for="classFilter">Show Class</label><select id="classFilter" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:11px 12px;font:inherit"><option value="">All Classes</option></select></div></div><div class="actions no-print" style="margin:0 0 12px"><button class="primary" id="downloadClassPdf">Download Class / All Results PDF</button></div><p class="note no-print">PDF save karne ke liye print window mein Destination/Printer se “Save as PDF” select karein.</p><div id="records"><div class="empty">No records saved yet.</div></div>
+<h2>Saved Student Records — Class Wise</h2><div class="student-grid no-print" style="margin-bottom:12px"><div><label for="classFilter">Show Class</label><select id="classFilter" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:11px 12px;font:inherit"><option value="">All Classes</option></select></div></div><div class="actions no-print" style="margin:0 0 12px"><button class="primary" id="downloadClassPdf">Download Class / All Results PDF</button></div><p class="note no-print">PDF button dabate hi file seedha Downloads folder mein save hogi.</p><div id="records"><div class="empty">No records saved yet.</div></div>
 </section>
 </div>
 <script>
@@ -122,29 +122,80 @@ function renderRecords(){
  const td=document.createElement('td');td.className='record-actions';const p=document.createElement('button');p.className='secondary';p.textContent='Download PDF';p.onclick=()=>printRecord(r);
  const d=document.createElement('button');d.className='danger';d.textContent='Delete';d.onclick=()=>{if(confirm('Delete this record?')){localStorage.setItem('studentResults',JSON.stringify(all.filter(x=>x.id!==r.id)));renderRecords()}};td.append(p,d);tr.appendChild(td);body.appendChild(tr)});
 }
+function safePdfText(value){
+ return String(value??'').normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^\\x20-\\x7E]/g,'?');
+}
+function downloadPdf(title,lines,filename){
+ const wrapped=[];
+ lines.forEach(line=>{
+  const text=safePdfText(line);
+  if(!text){wrapped.push('');return}
+  let rest=text;
+  while(rest.length>88){let cut=rest.lastIndexOf(' ',88);if(cut<30)cut=88;wrapped.push(rest.slice(0,cut));rest=rest.slice(cut).trim()}
+  wrapped.push(rest);
+ });
+ const pages=[];
+ for(let i=0;i<wrapped.length;i+=48)pages.push(wrapped.slice(i,i+48));
+ if(!pages.length)pages.push(['No result data']);
+ const objects=[];
+ const add=obj=>{objects.push(obj);return objects.length};
+ const catalogId=add('');
+ const pagesId=add('');
+ const fontId=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+ const pageIds=[];
+ pages.forEach((page,index)=>{
+  let stream='BT /F1 10 Tf 48 790 Td 14 TL ';
+  stream+='('+pdfEscape(title)+') Tj T* T* ';
+  page.forEach(line=>{stream+='('+pdfEscape(line)+') Tj T* '});
+  stream+='ET';
+  const contentId=add('<< /Length '+stream.length+' >>\\nstream\\n'+stream+'\\nendstream');
+  const pageId=add('<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 '+fontId+' 0 R >> >> /Contents '+contentId+' 0 R >>');
+  pageIds.push(pageId);
+ });
+ objects[catalogId-1]='<< /Type /Catalog /Pages '+pagesId+' 0 R >>';
+ objects[pagesId-1]='<< /Type /Pages /Kids ['+pageIds.map(id=>id+' 0 R').join(' ')+'] /Count '+pageIds.length+' >>';
+ let pdf='%PDF-1.4\\n';
+ const offsets=[0];
+ objects.forEach((obj,i)=>{offsets.push(pdf.length);pdf+=(i+1)+' 0 obj\\n'+obj+'\\nendobj\\n'});
+ const xref=pdf.length;
+ pdf+='xref\\n0 '+(objects.length+1)+'\\n0000000000 65535 f \\n';
+ for(let i=1;i<offsets.length;i++)pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \\n';
+ pdf+='trailer\\n<< /Size '+(objects.length+1)+' /Root '+catalogId+' 0 R >>\\nstartxref\\n'+xref+'\\n%%EOF';
+ const blob=new Blob([pdf],{type:'application/pdf'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download=filename;a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+function pdfEscape(value){return safePdfText(value).replace(/\\\\/g,'\\\\\\\\').replace(/\\(/g,'\\\\(').replace(/\\)/g,'\\\\)')}
+function resultPdfLines(r){
+ return ['Student Result','Name: '+(r.name||'Not specified'),'Roll Number: '+(r.roll||'Not specified'),'Class: '+(r.className||'Not specified'),'Date: '+(r.date||''),'','Subject                 Obtained     Total     Status',
+ ...r.subjects.map(s=>s.name+'                 '+fmt(s.obtained)+'     '+fmt(s.max)+'     '+(s.obtained/s.max>=.4?'PASS':'FAIL')),
+ '','Total Obtained: '+fmt(r.obtained)+' / '+fmt(r.total),'Percentage: '+r.percentage.toFixed(2)+'%','Grade: '+r.grade,'Overall Status: '+r.status];
+}
 function printCurrentResult(){
  const r=calculate();if(!r)return;
  if(!r.name){alert('Please enter the student name first.');return}
- printRecord(r);
+ const filename=(r.name||'student').replace(/[^a-z0-9_-]+/gi,'_')+'_result.pdf';
+ downloadPdf('STUDENT RESULT',resultPdfLines(r),filename);
 }
 function printClassReport(){
  const all=JSON.parse(localStorage.getItem('studentResults')||'[]');
  const cls=document.getElementById('classFilter').value;
  const rows=cls?all.filter(r=>(r.className||'Unassigned')===cls):all;
  if(!rows.length){alert('Is class ke liye koi saved record nahi mila.');return}
- const w=window.open('','_blank');if(!w){alert('Please allow pop-ups to create the PDF.');return}
- const cards=rows.map(r=>{
- const subjects=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td><td class="'+(s.obtained/s.max>=.4?'pass':'fail')+'">'+(s.obtained/s.max>=.4?'PASS':'FAIL')+'</td></tr>').join('');
- return '<section class="student"><h2>'+esc(r.name)+' — '+esc(r.className||'Unassigned')+'</h2><p>Roll No: '+esc(r.roll||'—')+' | Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+esc(r.grade)+' | Status: '+esc(r.status)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th><th>Status</th></tr>'+subjects+'</table><p><b>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</b></p></section>';
- }).join('');
- w.document.write('<!doctype html><html><head><title>Class Student Results</title><style>body{font:14px Arial;padding:24px;color:#172033}.pass{color:#15803d;font-weight:bold}.fail{color:#b91c1c;font-weight:bold}h1{margin-bottom:4px}.student{margin:22px 0;padding-bottom:16px;border-bottom:2px solid #ddd;break-inside:avoid}table{border-collapse:collapse;width:100%;margin-top:10px}td,th{border:1px solid #bbb;padding:7px;text-align:left}@media print{button{display:none}}</style></head><body><h1>Student Results Report</h1><p>Class: '+esc(cls||'All Classes')+' | Students: '+rows.length+'</p>'+cards+'</body></html>');
- w.document.close();w.focus();w.print();
+ const lines=['Class: '+(cls||'All Classes'),'Students: '+rows.length,''];
+ rows.forEach((r,index)=>{
+  lines.push('STUDENT '+(index+1)+': '+r.name+' | Roll: '+(r.roll||'-')+' | Class: '+(r.className||'Unassigned'));
+  lines.push('Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+r.grade+' | Overall: '+r.status);
+  lines.push('Subject                 Obtained     Total     Status');
+  r.subjects.forEach(s=>lines.push(s.name+'                 '+fmt(s.obtained)+'     '+fmt(s.max)+'     '+(s.obtained/s.max>=.4?'PASS':'FAIL')));
+  lines.push('Total: '+fmt(r.obtained)+' / '+fmt(r.total),'');
+ });
+ downloadPdf('CLASS STUDENT RESULTS',lines,(cls||'all_classes').replace(/[^a-z0-9_-]+/gi,'_')+'_results.pdf');
 }
 function printRecord(r){
- const w=window.open('','_blank');if(!w){alert('Please allow pop-ups to print a saved result.');return}
- const lines=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td><td class="'+(s.obtained/s.max>=.4?'pass':'fail')+'">'+(s.obtained/s.max>=.4?'PASS':'FAIL')+'</td></tr>').join('');
- w.document.write('<html><head><title>Student Result</title><style>body{font:16px Arial;padding:30px}.pass{color:#15803d;font-weight:bold}.fail{color:#b91c1c;font-weight:bold}table{border-collapse:collapse;width:100%;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}</style></head><body><h1>Student Result</h1><p>Class: '+esc(r.className||'Not specified')+' | Name: '+esc(r.name)+' | Roll: '+esc(r.roll)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th><th>Status</th></tr>'+lines+'</table><h3>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</h3><h3>Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+r.grade+' | '+r.status+'</h3></body></html>');
- w.document.close();w.print();
+ const filename=(r.name||'student').replace(/[^a-z0-9_-]+/gi,'_')+'_result.pdf';
+ downloadPdf('STUDENT RESULT',resultPdfLines(r),filename);
 }
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 document.getElementById('export').addEventListener('click',()=>{
