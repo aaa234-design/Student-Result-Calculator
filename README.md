@@ -5,16 +5,17 @@ A simple, offline student result calculator that runs in any modern browser. No 
 ## Run
 1. Download or clone this repository.
 2. Open `index.html` in a browser (double-click it).
-3. Enter student information and marks, then select **Calculate Result**.
+3. Enter the student's class, name, roll number and marks, then select **Calculate Result**.
 
 ## Features
 - Seven subjects are included by default.
 - Add as many extra subjects as needed.
 - Edit each subject name and its maximum marks independently (for example, Computer can be out of 75).
-- Enter obtained marks; validation prevents marks exceeding the subject maximum.
+- Enter each student's class/grade (for example, Class 9 or 10-A).
+- Save multiple student records and view them together or filter the saved list class-wise.
 - Automatic total, percentage, grade, and pass/fail calculation.
 - Pass rule: at least 40% in every subject.
-- Save multiple records in browser local storage, print results, delete records, and export saved records as JSON.
+- Print current or saved results, delete records, and export saved records as JSON.
 - Fully offline; records remain in the same browser on the same device.
 
 ## Grade scale
