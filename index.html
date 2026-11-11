@@ -38,6 +38,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{t
 <div class="student-grid">
 <div><label for="studentName">Student Name</label><input id="studentName" placeholder="Enter student name"></div>
 <div><label for="rollNumber">Roll Number</label><input id="rollNumber" placeholder="Enter roll number"></div>
+<div><label for="className">Class / Grade</label><input id="className" placeholder="e.g. Class 9, 10-A"></div>
 </div>
 </section>
 <section class="panel">
@@ -58,7 +59,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{t
 <div class="actions no-print"><button class="primary" id="save">Save Student Record</button><button class="secondary" id="export">Export Records (JSON)</button></div>
 </section>
 <section class="panel" id="records-panel">
-<h2>Saved Student Records</h2><div id="records"><div class="empty">No records saved yet.</div></div>
+<h2>Saved Student Records — Class Wise</h2><div class="student-grid no-print" style="margin-bottom:12px"><div><label for="classFilter">Show Class</label><select id="classFilter" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:11px 12px;font:inherit"><option value="">All Classes</option></select></div></div><div id="records"><div class="empty">No records saved yet.</div></div>
 </section>
 </div>
 <script>
@@ -91,7 +92,7 @@ function calculate(){
  const obtained=rows.reduce((a,s)=>a+s.obtained,0),total=rows.reduce((a,s)=>a+s.max,0),percentage=total?obtained/total*100:0;
  const passed=rows.every(s=>s.obtained/s.max>=.4);
  const grade=percentage>=90?'A+':percentage>=80?'A':percentage>=70?'B':percentage>=60?'C':percentage>=50?'D':percentage>=40?'E':'F';
- lastResult={name:document.getElementById('studentName').value.trim(),roll:document.getElementById('rollNumber').value.trim(),subjects:rows,obtained,total,percentage,grade,status:passed?'PASS':'FAIL',date:new Date().toLocaleString()};
+ lastResult={name:document.getElementById('studentName').value.trim(),roll:document.getElementById('rollNumber').value.trim(),className:document.getElementById('className').value.trim(),subjects:rows,obtained,total,percentage,grade,status:passed?'PASS':'FAIL',date:new Date().toLocaleString()};
  document.getElementById('obtained').textContent=fmt(obtained);document.getElementById('total').textContent=fmt(total);
  document.getElementById('percentage').textContent=percentage.toFixed(2)+'%';document.getElementById('grade').textContent=grade;
  const st=document.getElementById('status');st.textContent=passed?'PASS':'FAIL';st.className='status '+(passed?'pass':'fail');
@@ -106,23 +107,29 @@ document.getElementById('save').addEventListener('click',()=>{
 });
 function renderRecords(){
  const all=JSON.parse(localStorage.getItem('studentResults')||'[]'),el=document.getElementById('records');
+ const filter=document.getElementById('classFilter'),selected=filter.value;
+ const classes=[...new Set(all.map(r=>r.className||'Unassigned'))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+ filter.innerHTML='<option value="">All Classes</option>'+classes.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+ filter.value=classes.includes(selected)?selected:'';
+ const shown=filter.value?all.filter(r=>(r.className||'Unassigned')===filter.value):all;
  if(!all.length){el.innerHTML='<div class="empty">No records saved yet.</div>';return}
- el.innerHTML='<table><thead><tr><th>Name</th><th>Roll No.</th><th>Percentage</th><th>Grade</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>';
+ if(!shown.length){el.innerHTML='<div class="empty">Is class mein abhi koi student record nahi.</div>';return}
+ el.innerHTML='<table><thead><tr><th>Class</th><th>Name</th><th>Roll No.</th><th>Percentage</th><th>Grade</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>';
  const body=el.querySelector('tbody');
- all.forEach(r=>{const tr=document.createElement('tr');[r.name,r.roll,r.percentage.toFixed(2)+'%',r.grade,r.status].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td)});
+ shown.forEach(r=>{const tr=document.createElement('tr');[r.className||'Unassigned',r.name,r.roll,r.percentage.toFixed(2)+'%',r.grade,r.status].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.appendChild(td)});
  const td=document.createElement('td');td.className='record-actions';const p=document.createElement('button');p.className='secondary';p.textContent='Print';p.onclick=()=>printRecord(r);
  const d=document.createElement('button');d.className='danger';d.textContent='Delete';d.onclick=()=>{if(confirm('Delete this record?')){localStorage.setItem('studentResults',JSON.stringify(all.filter(x=>x.id!==r.id)));renderRecords()}};td.append(p,d);tr.appendChild(td);body.appendChild(tr)});
 }
 function printRecord(r){
  const w=window.open('','_blank');if(!w){alert('Please allow pop-ups to print a saved result.');return}
  const lines=r.subjects.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+fmt(s.obtained)+'</td><td>'+fmt(s.max)+'</td></tr>').join('');
- w.document.write('<html><head><title>Student Result</title><style>body{font:16px Arial;padding:30px}table{border-collapse:collapse;width:100%;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}</style></head><body><h1>Student Result</h1><p>Name: '+esc(r.name)+' | Roll: '+esc(r.roll)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th></tr>'+lines+'</table><h3>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</h3><h3>Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+r.grade+' | '+r.status+'</h3></body></html>');
+ w.document.write('<html><head><title>Student Result</title><style>body{font:16px Arial;padding:30px}table{border-collapse:collapse;width:100%;margin-top:20px}td,th{border:1px solid #ccc;padding:10px;text-align:left}</style></head><body><h1>Student Result</h1><p>Class: '+esc(r.className||'Not specified')+' | Name: '+esc(r.name)+' | Roll: '+esc(r.roll)+'</p><table><tr><th>Subject</th><th>Obtained</th><th>Total</th></tr>'+lines+'</table><h3>Total: '+fmt(r.obtained)+' / '+fmt(r.total)+'</h3><h3>Percentage: '+r.percentage.toFixed(2)+'% | Grade: '+r.grade+' | '+r.status+'</h3></body></html>');
  w.document.close();w.print();
 }
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 document.getElementById('export').addEventListener('click',()=>{
  const data=localStorage.getItem('studentResults')||'[]';const blob=new Blob([data],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='student-results.json';a.click();URL.revokeObjectURL(a.href);
 });
-renderRecords();calculate();
+document.getElementById('classFilter').addEventListener('change',renderRecords);renderRecords();calculate();
 </script>
 </body></html>
